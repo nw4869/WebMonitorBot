@@ -2,6 +2,7 @@ from ElpamBot import ElpamBot
 from Parser import Parser
 from WebMonitor import WebMonitor
 import configparser
+import time
 
 
 def get_config(filename):
@@ -14,11 +15,20 @@ def get_config(filename):
     assert 'WebMonitor' in config.sections(), 'WebMonitor must not None!'
     assert 'url' in config['WebMonitor'], 'url in WebMonitor must not None!'
 
+    if 'Subscribers' not in config.sections():
+        config.add_section('Subscribers')
+
     return config
 
 
+def update_config(config):
+    with open('ElpamBot.ini', 'w', buffering=1) as fp:
+        config.write(fp)
+
+
 def main():
-    config = get_config('ElpamBot.ini')
+    config_file_path = 'ElpamBot.ini'
+    config = get_config(config_file_path)
 
     bot_config = config['Bot']
     web_monitor_config = config['WebMonitor']
@@ -28,8 +38,35 @@ def main():
         if section.startswith('Parser'):
             parser_configs.append(config[section])
 
+    subscribers_section = config['Subscribers']
+
     # init bot
-    elpam_bot = ElpamBot(bot_config.get('token'), proxy=bot_config.get('proxy'))
+    receivers = set(map(int, subscribers_section.keys()))
+    elpam_bot = ElpamBot(bot_config.get('token'), proxy=bot_config.get('proxy'), receivers=receivers)
+
+    # 用户订阅消息回调
+    @elpam_bot.event_receiver('subscribe')
+    def on_subscribe(message):
+        chat_id = str(message.chat_id)
+        if chat_id not in subscribers_section.keys():
+            data = {
+                'id': message.chat.id,
+                'type': message.chat.type,
+                'username': message.chat.username,
+                'first_name': message.chat.first_name,
+                'timestamp': int(time.time()),
+            }
+            config.set('Subscribers', chat_id, str(data))
+            # TODO fix 线程同步
+            update_config(config)
+
+    @elpam_bot.event_receiver('unsubscribe')
+    def on_unsubscribe(message):
+        chat_id = str(message.chat_id)
+        if chat_id in subscribers_section.keys():
+            config.remove_option('Subscribers', chat_id)
+            # TODO fix 线程同步
+            update_config(config)
 
     # init parsers
     parsers = []
@@ -47,9 +84,8 @@ def main():
 
     def changed_callback(data):
         elpam_bot.notify(data)
-        config.set('WebMonitor', 'last_data', monitor.last_data)
-        with open('ElpamBot.ini', 'w', buffering=1) as fp:
-            config.write(fp)
+        config.set('WebMonitor', 'last_data', monitor.last_data or '')
+        update_config(config)
 
     last_data = web_monitor_config.get('last_data')
 

@@ -4,6 +4,7 @@ import sched
 import functools
 import hashlib
 import sys
+from requests.exceptions import RequestException
 
 logger = logging.getLogger(__name__)
 
@@ -37,13 +38,17 @@ class WebMonitor:
                 content = parser.parse(content)
         except KeyboardInterrupt:
             sys.exit(1)
+        except RequestException as e:
+            logger.warning(e)
+            self.even = self.sched_continue()
+            return
         except Exception as e:
             logger.warning(e)
             content = None
 
         # 检查变更并通知
         if self.update_data(content):
-            logger.info('data change to: ' + content)
+            logger.info('data change to: ' + (content or ''))
             try:
                 self.changed_callback(content)
             except KeyboardInterrupt:
@@ -55,7 +60,7 @@ class WebMonitor:
     def update_data(self, data):
         if isinstance(data, str):
             data = data.encode()
-        hash = hashlib.sha256(data).hexdigest()
+        hash = hashlib.sha256(data).hexdigest() if data else None
         if self.last_data != hash:
             self.last_data = hash
             return True

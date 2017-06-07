@@ -9,20 +9,23 @@ logger = logging.getLogger(__name__)
 
 
 class ElpamBot:
-    def __init__(self, token, proxy=None):
+    def __init__(self, token, proxy=None, receivers=None):
         self.updater = Updater(token=token, request_kwargs={'proxy_url': proxy or ''})
 
-        self.receivers = set()
-        self.receivers.add(374440130)
+        self.receivers = receivers or set()
+        # self.receivers.add(374440130)
 
         self.last_data = None
+
+        self.subscribe_listeners = []
+        self.unsubscribe_listeners = []
 
         # decorator:不用每定义一个函数都要用handler以及add_handler
         def handler(handler, cmd=None, **kw):
             def decorator(func):
                 @wraps(func)
                 def wrapper(*args, **kw):
-                    return func(self, *args, **kw)
+                    return func(*args, **kw)
 
                 if cmd is None:
                     func_handler = handler(func, **kw)
@@ -44,15 +47,25 @@ class ElpamBot:
 
         @handler(CommandHandler, 'subscribe')
         def subscribe(bot, update):
-            logger.info('new subscriber: {0}'.format(update.message.chat))
-            self.receivers.add(update.message.chat_id)
-            update.message.reply_text('subscribe succeeded!')
+            if update.message.chat_id not in self.receivers:
+                self.receivers.add(update.message.chat_id)
+                for listener in self.subscribe_listeners:
+                    listener(update.message)
+                update.message.reply_text('subscribe succeeded!')
+                logger.info('new subscriber: {0}'.format(update.message.chat))
+            else:
+                update.message.reply_text('already subscribed')
 
         @handler(CommandHandler, 'unsubscribe')
         def unsubscribe(bot, update):
-            logger.info('remove subscriber: {0}'.format(update.message.chat_id))
-            self.receivers.remove(update.message.chat_id)
-            update.message.reply_text('unsubscribe succeeded!')
+            if update.message.chat_id in self.receivers:
+                self.receivers.remove(update.message.chat_id)
+                for listener in self.unsubscribe_listeners:
+                    listener(update.message)
+                update.message.reply_text('unsubscribe succeeded!')
+                logger.info('remove subscriber: {0}'.format(update.message.chat_id))
+            else:
+                update.message.reply_text('not subscribe')
 
         @handler(MessageHandler, Filters.text)
         def echo(bot, update):
@@ -72,6 +85,23 @@ class ElpamBot:
         self.last_data = msg
         for chat_id in self.receivers:
             self.updater.bot.send_message(chat_id, msg, parse_mode=telegram.ParseMode.HTML)
+
+    def event_receiver(self, type, **kwargs):
+        def decorator(func):
+            @wraps(func)
+            def wrapper(*args, **kwargs):
+                func(*args, **kwargs)
+
+            if type == 'subscribe':
+                if func not in self.subscribe_listeners:
+                    self.subscribe_listeners.append(func)
+            elif type == 'unsubscribe':
+                if func not in self.unsubscribe_listeners:
+                    self.unsubscribe_listeners.append(func)
+            else:
+                logger.warning('type not found: ' + type)
+            return wrapper
+        return decorator
 
     def start(self, blocking=True):
         self.updater.start_polling()
