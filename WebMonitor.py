@@ -3,6 +3,7 @@ import requests
 import sched
 import functools
 import hashlib
+import sys
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +35,8 @@ class WebMonitor:
             content = requests.get(self.url, headers=self.headers).content
             for parser in self.parsers:
                 content = parser.parse(content)
+        except KeyboardInterrupt:
+            sys.exit(1)
         except Exception as e:
             logger.warning(e)
             content = None
@@ -43,6 +46,8 @@ class WebMonitor:
             logger.info('data change to: ' + content)
             try:
                 self.changed_callback(content)
+            except KeyboardInterrupt:
+                sys.exit(1)
             except Exception as e:
                 logger.warning(e)
         self.even = self.sched_continue()
