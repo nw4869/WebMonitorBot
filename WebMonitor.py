@@ -2,6 +2,7 @@ import logging
 import requests
 import sched
 import functools
+import hashlib
 
 logger = logging.getLogger(__name__)
 
@@ -38,9 +39,8 @@ class WebMonitor:
             content = None
 
         # 检查变更并通知
-        if self._last_data != content:
+        if self.update_data(content):
             logger.info('data change to: ' + content)
-            self._last_data = content
             try:
                 self.changed_callback(content)
             except Exception as e:
@@ -50,6 +50,16 @@ class WebMonitor:
     @property
     def last_data(self):
         return self._last_data
+
+    def update_data(self, data):
+        if isinstance(data, str):
+            data = data.encode()
+        hash = hashlib.sha256(data).hexdigest()
+        if self._last_data != hash:
+            self._last_data = hash
+            return True
+        else:
+            return False
 
     def start(self):
         self.even = self.sched_continue()
