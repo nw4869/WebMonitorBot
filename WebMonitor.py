@@ -8,7 +8,7 @@ logger = logging.getLogger(__name__)
 
 
 class WebMonitor:
-    def __init__(self, url, parsers, changed_callback=None, interval=None, headers=None):
+    def __init__(self, url, parsers, changed_callback=None, interval=None, headers=None, last_data=None):
         self.url = url
         self.parsers = parsers or []
 
@@ -18,7 +18,7 @@ class WebMonitor:
         self.interval = interval if interval else 3*60
         self.headers = headers
 
-        self._last_data = None
+        self.last_data = last_data
 
         self.scheduler = sched.scheduler()
         self.even = None
@@ -47,16 +47,12 @@ class WebMonitor:
                 logger.warning(e)
         self.even = self.sched_continue()
 
-    @property
-    def last_data(self):
-        return self._last_data
-
     def update_data(self, data):
         if isinstance(data, str):
             data = data.encode()
         hash = hashlib.sha256(data).hexdigest()
-        if self._last_data != hash:
-            self._last_data = hash
+        if self.last_data != hash:
+            self.last_data = hash
             return True
         else:
             return False

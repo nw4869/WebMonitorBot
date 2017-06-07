@@ -47,8 +47,13 @@ def main():
 
     def changed_callback(data):
         elpam_bot.notify(data)
+        config.set('WebMonitor', 'last_data', monitor.last_data)
+        with open('ElpamBot.ini', 'w', buffering=1) as fp:
+            config.write(fp)
 
-    monitor = WebMonitor(url, parsers, changed_callback=changed_callback, interval=interval, headers=headers)
+    last_data = web_monitor_config.get('last_data')
+
+    monitor = WebMonitor(url, parsers, changed_callback=changed_callback, interval=interval, headers=headers, last_data=last_data)
 
     # start bot
     elpam_bot.start(blocking=False)
