@@ -63,7 +63,8 @@ class WebMonitor:
             return False
 
     def start(self):
-        self.even = self.sched_continue()
+        # self.even = self.sched_continue()
+        self.scheduler.enter(0, 1, self.request)
         self.scheduler.run()
 
     def stop(self):
