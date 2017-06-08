@@ -3,6 +3,7 @@ from Parser import Parser
 from WebMonitor import WebMonitor
 import configparser
 import time
+import threading
 
 
 def get_config(filename):
@@ -20,10 +21,13 @@ def get_config(filename):
 
     return config
 
+lock = threading.Lock()
+
 
 def update_config(config):
-    with open('ElpamBot.ini', 'w', buffering=1) as fp:
-        config.write(fp)
+    with lock:
+        with open('ElpamBot.ini', 'w', buffering=1) as fp:
+            config.write(fp)
 
 
 def main():
@@ -57,7 +61,6 @@ def main():
                 'timestamp': int(time.time()),
             }
             config.set('Subscribers', chat_id, str(data))
-            # TODO fix 线程同步
             update_config(config)
 
     @elpam_bot.event_receiver('unsubscribe')
@@ -65,7 +68,6 @@ def main():
         chat_id = str(message.chat_id)
         if chat_id in subscribers_section.keys():
             config.remove_option('Subscribers', chat_id)
-            # TODO fix 线程同步
             update_config(config)
 
     # init parsers
